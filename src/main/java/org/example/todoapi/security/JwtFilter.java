@@ -1,26 +1,26 @@
 package org.example.todoapi.security;
 
-import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.List;
 
 @Component
 public class JwtFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
+    private final CustomUserDetailsService userDetailsService;
 
-    public JwtFilter(JwtUtil jwtUtil) {
+    public JwtFilter(JwtUtil jwtUtil,
+                     CustomUserDetailsService userDetailsService) {
         this.jwtUtil = jwtUtil;
+        this.userDetailsService = userDetailsService;
     }
 
     @Override
@@ -38,24 +38,38 @@ public class JwtFilter extends OncePerRequestFilter {
 
         if (header != null && header.startsWith("Bearer ")) {
             String token = header.substring(7);
+
             try {
-                Claims claims = jwtUtil.parseToken(token);
-                String username = claims.getSubject();
-                String role = claims.get("role", String.class);
+                String username = jwtUtil.extractUsername(token);
 
-                var auth = new UsernamePasswordAuthenticationToken(
-                        username,
-                        null,
-                        List.of(new SimpleGrantedAuthority("ROLE_" + role))
-                );
+                if (username != null &&
+                        SecurityContextHolder.getContext().getAuthentication() == null) {
 
-                SecurityContextHolder.getContext().setAuthentication(auth);
+                    var userDetails =
+                            userDetailsService.loadUserByUsername(username);
+
+                    if (jwtUtil.validateToken(token, userDetails)) {
+
+                        UsernamePasswordAuthenticationToken auth =
+                                new UsernamePasswordAuthenticationToken(
+                                        userDetails,                 // ✅ UserDetails
+                                        null,
+                                        userDetails.getAuthorities() // ✅ ROLE_USER
+                                );
+//                        System.out.println("JWT USER = " + username);
+//                        System.out.println("AUTHORITIES = " + userDetails.getAuthorities());
+                        SecurityContextHolder.getContext()
+                                .setAuthentication(auth);
+
+
+                    }
+                }
+
             } catch (Exception e) {
-                // token sai → bỏ qua
+                // token không hợp lệ → bỏ qua
             }
         }
 
         filterChain.doFilter(request, response);
     }
 }
-

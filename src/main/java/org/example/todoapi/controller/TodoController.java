@@ -28,24 +28,36 @@ public class TodoController {
     @PostMapping
     @PreAuthorize("hasRole('USER')")
     public Todo create(@RequestBody Map<String, String> body, Authentication auth) {
-        return service.createTodo(body.get("Title"), auth.getName());
+        return service.createTodo(body.get("title"), auth.getName());
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('USER')")
     public Todo update(@PathVariable Long id, @RequestBody Map<String, Object> body, Authentication auth) {
-        return service.updateTodo(id, (String) body.get("Title"), (Boolean) body.get("Completed"), auth.getName());
+        return service.updateTodo(id, (String) body.get("title"), (Boolean) body.get("completed"), auth.getName());
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('USER')")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public void delete(@PathVariable Long id, Authentication auth) {
-        service.deleteTodo(id, auth.getName());
+        if(auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"))){
+            service.adminDelete(id);
+        } else {
+            service.deleteTodo(id, auth.getName());
+        }
     }
 
-    @DeleteMapping("/id")
-    @PreAuthorize("hasRole('ADMIN')")
-    public void delete(@PathVariable Long id) {
-        service.adminDelete(id);
+    @GetMapping("/test")
+    @PreAuthorize("hasRole('USER')")
+    public String test(Authentication auth) {
+        System.out.println(auth.getAuthorities());
+        return "OK";
     }
+
+    @GetMapping("/whoami")
+    public Object whoami(Authentication auth) {
+        return auth;
+    }
+
+
 }
